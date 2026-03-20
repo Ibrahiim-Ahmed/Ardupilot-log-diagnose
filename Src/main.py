@@ -71,6 +71,17 @@ def detect_voltage_drop_window(df, threshold=2):
 
 
 # -----------------------------
+# Confidence Scoring (NEW CORE)
+# -----------------------------
+def compute_confidence(severity, duration, max_duration=1000):
+    severity_score = min(severity / 50, 1.0)
+    duration_score = min(duration / max_duration, 1.0)
+
+    confidence = 0.6 * severity_score + 0.4 * duration_score
+    return round(confidence, 2)
+
+
+# -----------------------------
 # Cause Database
 # -----------------------------
 CAUSE_DB = {
@@ -97,32 +108,42 @@ def diagnose(df, features):
     vibe_window = detect_vibration_window(df)
 
     if vibe_window and features["vibration_mean"] > 20:
+        severity = features["vibration_mean"]
+        duration = vibe_window["duration"]
+
+        confidence = compute_confidence(severity, duration)
+
         issues.append({
             "issue": "High vibration",
             "evidence": [
-                f"Mean vibration = {features['vibration_mean']:.2f}",
-                f"Duration = {vibe_window['duration']} samples",
+                f"Mean vibration = {severity:.2f}",
+                f"Duration = {duration} samples",
                 f"Time window = {vibe_window['start']} → {vibe_window['end']}"
             ],
             "causes": CAUSE_DB["High vibration"],
             "fix": "Inspect propellers, motors, and frame stability",
-            "confidence": 0.80
+            "confidence": confidence
         })
 
     # Battery Issue
     volt_window = detect_voltage_drop_window(df)
 
     if volt_window and features["voltage_drop"] > 2:
+        severity = features["voltage_drop"] * 10  # scale for scoring
+        duration = volt_window["duration"]
+
+        confidence = compute_confidence(severity, duration)
+
         issues.append({
             "issue": "Battery voltage drop",
             "evidence": [
                 f"Voltage drop = {features['voltage_drop']:.2f}V",
-                f"Duration = {volt_window['duration']} samples",
+                f"Duration = {duration} samples",
                 f"Time window = {volt_window['start']} → {volt_window['end']}"
             ],
             "causes": CAUSE_DB["Battery voltage drop"],
             "fix": "Check battery health and power connections",
-            "confidence": 0.75
+            "confidence": confidence
         })
 
     return issues
